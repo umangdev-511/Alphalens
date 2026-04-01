@@ -736,12 +736,19 @@ with st.sidebar:
 # HEADER
 # ─────────────────────────────────────────────
 st.markdown("""
-<div style='margin-bottom: 2rem;'>
-    <div style='font-family: Syne, sans-serif; font-size: 2.6rem; font-weight: 800; color: #e8f5e9; letter-spacing: -0.02em; line-height: 1;'>
-        📡 AlphaLens
+<div class='hero-shell'>
+    <div class='hero-kicker'>AlphaLens // Indian Equities Intelligence Layer</div>
+    <div class='hero-title'>AI stock analyst with a live news-sentiment decision engine for NSE names.</div>
+    <div class='hero-copy'>
+        Technical momentum, fresh headlines, and an explainable recommendation model merged into one builder-grade dashboard.
     </div>
-    <div style='font-family: JetBrains Mono, monospace; font-size: 0.85rem; color: #4a7a6a; margin-top: 0.4rem; letter-spacing: 0.08em;'>
-        AI-POWERED STOCK ANALYST · NSE INDIA · REAL-TIME TECHNICALS
+    <div class='chip-row'>Real-time technicals · NLP headline scoring · Quant verdict · Claude narrative</div>
+</div>
+<div class='glass-card' style='margin-bottom: 1.25rem;'>
+    <div class='section-kicker'>Input</div>
+    <div class='section-title'>Run an institutional-style stock check</div>
+    <div class='section-copy'>
+        Enter an NSE ticker, pull current market structure, score the latest news flow, and generate an explainable Buy/Hold/Sell view.
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -788,11 +795,14 @@ if analyse:
         company_name = stock_info.get('longName', ticker)
         sector = stock_info.get('sector', '')
 
+        verdict_color = "#41e39a" if recommendation["verdict"] == "BUY" else "#ff6b6b" if recommendation["verdict"] == "SELL" else "#ffcb6b"
+
         # Company header
         st.markdown(f"""
-        <div style='margin-bottom: 1.5rem;'>
-            <div style='font-family: Syne, sans-serif; font-size: 1.5rem; font-weight: 700; color: #e8f5e9;'>{company_name}</div>
-            <div style='font-family: JetBrains Mono, monospace; font-size: 0.75rem; color: #4a7a6a; letter-spacing: 0.1em;'>{ticker}.NS · NSE INDIA{' · ' + sector.upper() if sector else ''}</div>
+        <div class='glass-card' style='margin-bottom: 1.2rem;'>
+            <div class='verdict-pill' style='border:1px solid {verdict_color}; color:{verdict_color};'>Quant Verdict · {recommendation["verdict"]}</div>
+            <div style='font-family: Syne, sans-serif; font-size: 2rem; font-weight: 800; color: #e8f5e9; line-height:1.05;'>{company_name}</div>
+            <div style='font-family: JetBrains Mono, monospace; font-size: 0.75rem; color: #6d9586; letter-spacing: 0.1em; margin-top:0.35rem;'>{ticker}.NS · NSE INDIA{' · ' + sector.upper() if sector else ''}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -813,12 +823,15 @@ if analyse:
 
         engine_cols = st.columns([1.2, 1, 1, 1])
         engine_cols[0].markdown(f"""
-        <div style='background:#080d14; border:1px solid rgba(0,200,120,0.15); border-radius:6px; padding:1rem 1.2rem; height:100%;'>
-            <div style='font-family: JetBrains Mono, monospace; font-size:0.72rem; letter-spacing:0.1em; color:#4a7a6a;'>DECISION ENGINE</div>
-            <div style='font-family: Syne, sans-serif; font-size:2rem; font-weight:800; color:{"#00c878" if recommendation["verdict"] == "BUY" else "#ff4560" if recommendation["verdict"] == "SELL" else "#ffd166"};'>
+        <div class='glass-card' style='height:100%;'>
+            <div class='section-kicker'>Decision Engine</div>
+            <div style='font-family: Syne, sans-serif; font-size:2.3rem; font-weight:800; color:{verdict_color}; line-height:0.95;'>
                 {recommendation["verdict"]}
             </div>
-            <div style='font-family: JetBrains Mono, monospace; font-size:0.8rem; color:#a8c8b8;'>Composite score {recommendation["composite_score"]} · Conviction {recommendation["conviction"]}/100</div>
+            <div style='font-family: JetBrains Mono, monospace; font-size:0.8rem; color:#a8c8b8; margin-top:0.55rem;'>Composite score {recommendation["composite_score"]} · Conviction {recommendation["conviction"]}/100</div>
+            <div style='margin-top:0.8rem; height:8px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden;'>
+                <div style='width:{recommendation["conviction"]}%; height:100%; background:linear-gradient(90deg, {verdict_color}, #4cc9f0);'></div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         engine_cols[1].metric("NEWS SENTIMENT", f"{sentiment_summary['sentiment_percent']}/100", sentiment_summary["sentiment_label"])
@@ -826,23 +839,50 @@ if analyse:
         engine_cols[3].metric("MODEL CONFIDENCE", f"{sentiment_summary['confidence']:.2f}", "News-weighted")
 
         st.markdown("<div style='height: 0.6rem'></div>", unsafe_allow_html=True)
-        with st.container(border=False):
+        top_left, top_right = st.columns([1.1, 1])
+        with top_left:
             st.markdown("""
-            <div style='font-family: Syne, sans-serif; font-size: 1rem; font-weight: 700; color: #00c878;
-                 letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 0.8rem;'>
-                Signal Breakdown
+            <div class='glass-card'>
+                <div class='section-kicker'>What Drove The Call</div>
+                <div class='section-title'>Signal breakdown</div>
+                <div class='section-copy'>A readable explanation of the current model output, combining chart structure and news tone.</div>
             </div>
             """, unsafe_allow_html=True)
             for reason in recommendation["reasons"]:
                 st.markdown(f"- {reason}")
+        with top_right:
+            st.markdown("""
+            <div class='glass-card' style='padding-bottom:0.4rem;'>
+                <div class='section-kicker'>Sentiment Gauge</div>
+                <div class='section-title'>Headline mood map</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.plotly_chart(build_sentiment_gauge(sentiment_summary, recommendation), use_container_width=True)
 
         # Chart
-        st.plotly_chart(build_chart(df, ticker), use_container_width=True)
+        chart_col, factor_col = st.columns([1.55, 1])
+        with chart_col:
+            st.markdown("""
+            <div class='glass-card' style='padding-bottom:0.4rem; margin-bottom:0.7rem;'>
+                <div class='section-kicker'>Price Structure</div>
+                <div class='section-title'>Multi-layer technical view</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.plotly_chart(build_chart(df, ticker), use_container_width=True)
+        with factor_col:
+            st.markdown("""
+            <div class='glass-card' style='padding-bottom:0.4rem; margin-bottom:0.7rem;'>
+                <div class='section-kicker'>Factor Weights</div>
+                <div class='section-title'>Contribution to verdict</div>
+            </div>
+            """, unsafe_allow_html=True)
+            st.plotly_chart(build_factor_chart(df, sentiment_summary), use_container_width=True)
 
         st.markdown("""
-        <div style='font-family: Syne, sans-serif; font-size: 1rem; font-weight: 700; color: #00c878;
-             letter-spacing: 0.08em; text-transform: uppercase; margin: 1.5rem 0 0.8rem;'>
-            News Sentiment Radar
+        <div class='glass-card' style='padding-bottom:0.85rem; margin: 1rem 0 0.8rem;'>
+            <div class='section-kicker'>Headline Tape</div>
+            <div class='section-title'>News sentiment radar</div>
+            <div class='section-copy'>Recent headlines scored individually so the recommendation stays explainable.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -869,9 +909,10 @@ if analyse:
 
         # AI Report
         st.markdown("""
-        <div style='font-family: Syne, sans-serif; font-size: 1rem; font-weight: 700; color: #00c878;
-             letter-spacing: 0.08em; text-transform: uppercase; margin: 1.5rem 0 0.8rem;'>
-            🤖 AI Analyst Report
+        <div class='glass-card' style='padding-bottom:0.85rem; margin: 1rem 0 0.8rem;'>
+            <div class='section-kicker'>AI Layer</div>
+            <div class='section-title'>Claude analyst report</div>
+            <div class='section-copy'>Narrative commentary generated from the same technical and sentiment inputs driving the quant verdict.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -896,10 +937,14 @@ if analyse:
 else:
     # Empty state
     st.markdown("""
-    <div style='text-align: center; padding: 5rem 2rem; opacity: 0.4;'>
-        <div style='font-size: 3rem; margin-bottom: 1rem;'>📊</div>
-        <div style='font-family: JetBrains Mono, monospace; font-size: 0.85rem; color: #4a7a6a; letter-spacing: 0.1em;'>
-            ENTER A TICKER ABOVE TO BEGIN ANALYSIS
+    <div class='glass-card' style='text-align:center; padding:4.5rem 2rem; margin-top:0.75rem;'>
+        <div style='font-size: 3.5rem; margin-bottom: 1rem;'>📊</div>
+        <div class='section-kicker'>Awaiting Input</div>
+        <div style='font-family: Syne, sans-serif; font-size: 1.35rem; font-weight: 700; color: #e8f5e9; margin-bottom:0.45rem;'>
+            Enter an NSE ticker to activate the AlphaLens decision engine
+        </div>
+        <div style='font-family: JetBrains Mono, monospace; font-size: 0.8rem; color: #6d9586; letter-spacing: 0.08em;'>
+            EXAMPLES · RELIANCE · TCS · INFY · HDFCBANK · SBIN
         </div>
     </div>
     """, unsafe_allow_html=True)
