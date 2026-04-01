@@ -404,6 +404,10 @@ def fetch_stock_news(ticker: str, company_name: str) -> pd.DataFrame:
 
     news_df = pd.DataFrame(raw_articles).drop_duplicates(subset=["title"]).copy()
     news_df["published_at"] = pd.to_datetime(news_df["published_at"], errors="coerce")
+    if pd.api.types.is_datetime64tz_dtype(news_df["published_at"]):
+        news_df["published_at"] = news_df["published_at"].dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
+    else:
+        news_df["published_at"] = news_df["published_at"].dt.tz_localize(None)
     now = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None)
     cutoff = now - pd.Timedelta(days=NEWS_LOOKBACK_DAYS)
     recent_mask = news_df["published_at"].isna() | (news_df["published_at"] >= cutoff)
@@ -469,6 +473,10 @@ def analyse_news_sentiment(news_df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     scores = scored_df["title"].apply(score_headline_sentiment).apply(pd.Series)
     scored_df = pd.concat([scored_df, scores], axis=1)
 
+    if pd.api.types.is_datetime64tz_dtype(scored_df["published_at"]):
+        scored_df["published_at"] = scored_df["published_at"].dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
+    else:
+        scored_df["published_at"] = scored_df["published_at"].dt.tz_localize(None)
     now = pd.Timestamp.now(tz="Asia/Kolkata").tz_localize(None)
     age_days = ((now - scored_df["published_at"]).dt.total_seconds() / 86400).clip(lower=0)
     scored_df["recency_weight"] = np.where(scored_df["published_at"].notna(), np.exp(-age_days / 4), 0.65)
@@ -844,7 +852,7 @@ with st.form("analysis_form", clear_on_submit=False):
     col1, col2 = st.columns([4, 1])
     with col1:
         st.text_input(
-            "",
+            "NSE ticker",
             placeholder="Enter NSE ticker — e.g. RELIANCE, TCS, INFY, HDFCBANK",
             key="ticker_input",
             label_visibility="collapsed",
