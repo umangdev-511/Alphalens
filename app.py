@@ -411,6 +411,17 @@ def fetch_stock_news(ticker: str, company_name: str) -> pd.DataFrame:
     return news_df.head(MAX_HEADLINES).reset_index(drop=True)
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def load_market_context(ticker: str):
+    df = fetch_stock_data(ticker)
+    df = compute_indicators(df)
+    stock_info = yf.Ticker(ticker + ".NS").info
+    news_df = fetch_stock_news(ticker, stock_info.get("longName", ticker))
+    scored_news_df, sentiment_summary = analyse_news_sentiment(news_df)
+    recommendation = generate_recommendation(df, sentiment_summary)
+    return df, stock_info, scored_news_df, sentiment_summary, recommendation
+
+
 def score_headline_sentiment(headline: str) -> dict:
     headline_lower = headline.lower()
     vader_score = VADER_ANALYSER.polarity_scores(headline)["compound"]
@@ -824,12 +835,19 @@ st.markdown("""
 # ─────────────────────────────────────────────
 # INPUT
 # ─────────────────────────────────────────────
-col1, col2 = st.columns([4, 1])
-with col1:
-    ticker = st.text_input("", placeholder="Enter NSE ticker — e.g. RELIANCE, TCS, INFY, HDFCBANK",
-        label_visibility="collapsed")
-with col2:
-    analyse = st.button("ANALYSE →", use_container_width=True, type="primary")
+if "analysis_payload" not in st.session_state:
+    st.session_state.analysis_payload = None
+
+with st.form("analysis_form", clear_on_submit=False):
+    col1, col2 = st.columns([4, 1])
+    with col1:
+        ticker = st.text_input(
+            "",
+            placeholder="Enter NSE ticker — e.g. RELIANCE, TCS, INFY, HDFCBANK",
+            label_visibility="collapsed",
+        )
+    with col2:
+        analyse = st.form_submit_button("ANALYSE →", use_container_width=True, type="primary")
 
 st.markdown("---")
 
@@ -846,161 +864,180 @@ if analyse:
 
         with st.spinner(f"Fetching market data for {ticker}..."):
             try:
-                df = fetch_stock_data(ticker)
-                df = compute_indicators(df)
-                stock_info = yf.Ticker(ticker + ".NS").info
-                news_df = fetch_stock_news(ticker, stock_info.get("longName", ticker))
-                scored_news_df, sentiment_summary = analyse_news_sentiment(news_df)
-                recommendation = generate_recommendation(df, sentiment_summary)
+                df, stock_info, scored_news_df, sentiment_summary, recommendation = load_market_context(ticker)
+                ai_report = None
+                ai_report_error = None
+                with st.spinner("Generating analysis..."):
+                    try:
+                        summary = summarise_for_ai(df, ticker, stock_info, sentiment_summary, recommendation)
+                        ai_report = generate_ai_report(summary, ticker, api_key, recommendation)
+                    except Exception as e:
+                        ai_report_error = str(e)
+                st.session_state.analysis_payload = {
+                    "ticker": ticker,
+                    "df": df,
+                    "stock_info": stock_info,
+                    "scored_news_df": scored_news_df,
+                    "sentiment_summary": sentiment_summary,
+                    "recommendation": recommendation,
+                    "ai_report": ai_report,
+                    "ai_report_error": ai_report_error,
+                }
             except Exception as e:
                 st.error(f"⚠ {str(e)}")
                 st.info("💡 Yahoo Finance may be rate-limiting. Wait 30 seconds and try again.")
                 st.stop()
 
-        latest = df.iloc[-1]
-        prev = df.iloc[-2]
-        price_change = ((float(latest['Close']) - float(prev['Close'])) / float(prev['Close'])) * 100
-        company_name = stock_info.get('longName', ticker)
-        sector = stock_info.get('sector', '')
+if st.session_state.analysis_payload:
+    analysis_payload = st.session_state.analysis_payload
+    ticker = analysis_payload["ticker"]
+    df = analysis_payload["df"]
+    stock_info = analysis_payload["stock_info"]
+    scored_news_df = analysis_payload["scored_news_df"]
+    sentiment_summary = analysis_payload["sentiment_summary"]
+    recommendation = analysis_payload["recommendation"]
+    ai_report = analysis_payload.get("ai_report")
+    ai_report_error = analysis_payload.get("ai_report_error")
 
-        verdict_color = "#41e39a" if recommendation["verdict"] == "BUY" else "#ff6b6b" if recommendation["verdict"] == "SELL" else "#ffcb6b"
+    latest = df.iloc[-1]
+    prev = df.iloc[-2]
+    price_change = ((float(latest['Close']) - float(prev['Close'])) / float(prev['Close'])) * 100
+    company_name = stock_info.get('longName', ticker)
+    sector = stock_info.get('sector', '')
 
-        # Company header
+    verdict_color = "#41e39a" if recommendation["verdict"] == "BUY" else "#ff6b6b" if recommendation["verdict"] == "SELL" else "#ffcb6b"
+
+    # Company header
+    st.markdown(f"""
+    <div class='glass-card' style='margin-bottom: 1.2rem;'>
+        <div class='verdict-pill' style='border:1px solid {verdict_color}; color:{verdict_color};'>Quant Verdict · {recommendation["verdict"]}</div>
+        <div style='font-family: Syne, sans-serif; font-size: 2rem; font-weight: 800; color: #e8f5e9; line-height:1.05;'>{company_name}</div>
+        <div style='font-family: JetBrains Mono, monospace; font-size: 0.75rem; color: #6d9586; letter-spacing: 0.1em; margin-top:0.35rem;'>{ticker}.NS · NSE INDIA{' · ' + sector.upper() if sector else ''}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Metrics
+    m1, m2, m3, m4, m5 = st.columns(5)
+    rsi_val = float(latest['RSI'])
+    rsi_label = "⚠ Overbought" if rsi_val > 70 else "⚠ Oversold" if rsi_val < 30 else "Neutral"
+    macd_val = float(latest['MACD'])
+    sig_val = float(latest['Signal'])
+
+    m1.metric("PRICE", f"₹{float(latest['Close']):.2f}", f"{price_change:+.2f}%")
+    m2.metric("RSI (14)", f"{rsi_val:.1f}", rsi_label)
+    m3.metric("SMA 20", f"₹{float(latest['SMA20']):.2f}", "Above ↑" if float(latest['Close']) > float(latest['SMA20']) else "Below ↓")
+    m4.metric("SMA 50", f"₹{float(latest['SMA50']):.2f}", "Above ↑" if float(latest['Close']) > float(latest['SMA50']) else "Below ↓")
+    m5.metric("MACD", "Bullish" if macd_val > sig_val else "Bearish", f"{macd_val:.3f}")
+
+    st.markdown("<div style='height: 1rem'></div>", unsafe_allow_html=True)
+
+    engine_cols = st.columns([1.2, 1, 1, 1])
+    engine_cols[0].markdown(f"""
+    <div class='glass-card' style='height:100%;'>
+        <div class='section-kicker'>Decision Engine</div>
+        <div style='font-family: Syne, sans-serif; font-size:2.3rem; font-weight:800; color:{verdict_color}; line-height:0.95;'>
+            {recommendation["verdict"]}
+        </div>
+        <div style='font-family: JetBrains Mono, monospace; font-size:0.8rem; color:#a8c8b8; margin-top:0.55rem;'>Composite score {recommendation["composite_score"]} · Conviction {recommendation["conviction"]}/100</div>
+        <div style='margin-top:0.8rem; height:8px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden;'>
+            <div style='width:{recommendation["conviction"]}%; height:100%; background:linear-gradient(90deg, {verdict_color}, #4cc9f0);'></div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    engine_cols[1].metric("NEWS SENTIMENT", f"{sentiment_summary['sentiment_percent']}/100", sentiment_summary["sentiment_label"])
+    engine_cols[2].metric("HEADLINES", sentiment_summary["headline_count"], f"{sentiment_summary['positive_headlines']} positive")
+    engine_cols[3].metric("MODEL CONFIDENCE", f"{sentiment_summary['confidence']:.2f}", "News-weighted")
+
+    st.markdown("<div style='height: 0.6rem'></div>", unsafe_allow_html=True)
+    top_left, top_right = st.columns([1.1, 1])
+    with top_left:
+        st.markdown("""
+        <div class='glass-card'>
+            <div class='section-kicker'>What Drove The Call</div>
+            <div class='section-title'>Signal breakdown</div>
+            <div class='section-copy'>A readable explanation of the current model output, combining chart structure and news tone.</div>
+        </div>
+        """, unsafe_allow_html=True)
+        for reason in recommendation["reasons"]:
+            st.markdown(f"- {reason}")
+    with top_right:
+        st.markdown("""
+        <div class='glass-card' style='padding-bottom:0.4rem;'>
+            <div class='section-kicker'>Sentiment Gauge</div>
+            <div class='section-title'>Headline mood map</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(build_sentiment_gauge(sentiment_summary, recommendation), use_container_width=True)
+
+    chart_col, factor_col = st.columns([1.55, 1])
+    with chart_col:
+        st.markdown("""
+        <div class='glass-card' style='padding-bottom:0.4rem; margin-bottom:0.7rem;'>
+            <div class='section-kicker'>Price Structure</div>
+            <div class='section-title'>Multi-layer technical view</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(build_chart(df, ticker), use_container_width=True)
+    with factor_col:
+        st.markdown("""
+        <div class='glass-card' style='padding-bottom:0.4rem; margin-bottom:0.7rem;'>
+            <div class='section-kicker'>Factor Weights</div>
+            <div class='section-title'>Contribution to verdict</div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.plotly_chart(build_factor_chart(df, sentiment_summary), use_container_width=True)
+
+    st.markdown("""
+    <div class='glass-card' style='padding-bottom:0.85rem; margin: 1rem 0 0.8rem;'>
+        <div class='section-kicker'>Headline Tape</div>
+        <div class='section-title'>News sentiment radar</div>
+        <div class='section-copy'>Recent headlines scored individually so the recommendation stays explainable.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if scored_news_df.empty:
+        st.info("No recent headlines were available, so the sentiment engine defaulted to neutral.")
+    else:
+        display_news = scored_news_df.copy()
+        display_news["published_at"] = display_news["published_at"].dt.strftime("%d %b %H:%M").fillna("N/A")
+        display_news["sentiment"] = display_news["sentiment_score"].map(lambda x: f"{x:+.2f}")
+        st.dataframe(
+            display_news[["published_at", "publisher", "title", "link", "sentiment_label", "sentiment", "source"]],
+            column_config={
+                "published_at": "Published",
+                "publisher": "Publisher",
+                "title": "Headline",
+                "link": st.column_config.LinkColumn("Link", display_text="Open"),
+                "sentiment_label": "Tone",
+                "sentiment": "Score",
+                "source": "Source",
+            },
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.markdown("""
+    <div class='glass-card' style='padding-bottom:0.85rem; margin: 1rem 0 0.8rem;'>
+        <div class='section-kicker'>AI Layer</div>
+        <div class='section-title'>Claude analyst report</div>
+        <div class='section-copy'>Narrative commentary generated from the same technical and sentiment inputs driving the quant verdict.</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if ai_report:
         st.markdown(f"""
-        <div class='glass-card' style='margin-bottom: 1.2rem;'>
-            <div class='verdict-pill' style='border:1px solid {verdict_color}; color:{verdict_color};'>Quant Verdict · {recommendation["verdict"]}</div>
-            <div style='font-family: Syne, sans-serif; font-size: 2rem; font-weight: 800; color: #e8f5e9; line-height:1.05;'>{company_name}</div>
-            <div style='font-family: JetBrains Mono, monospace; font-size: 0.75rem; color: #6d9586; letter-spacing: 0.1em; margin-top:0.35rem;'>{ticker}.NS · NSE INDIA{' · ' + sector.upper() if sector else ''}</div>
+        <div style='background:#080d14; border:1px solid rgba(0,200,120,0.15);
+             border-left: 3px solid #00c878; border-radius: 6px;
+             padding: 1.6rem 2rem; font-family: JetBrains Mono, monospace;
+             font-size: 0.87rem; line-height: 1.85; color: #b8d8c8;'>
+        {ai_report.replace(chr(10), '<br>')}
         </div>
         """, unsafe_allow_html=True)
+    elif ai_report_error:
+        st.error(f"AI report failed: {ai_report_error}")
 
-        # Metrics
-        m1, m2, m3, m4, m5 = st.columns(5)
-        rsi_val = float(latest['RSI'])
-        rsi_label = "⚠ Overbought" if rsi_val > 70 else "⚠ Oversold" if rsi_val < 30 else "Neutral"
-        macd_val = float(latest['MACD'])
-        sig_val = float(latest['Signal'])
-
-        m1.metric("PRICE", f"₹{float(latest['Close']):.2f}", f"{price_change:+.2f}%")
-        m2.metric("RSI (14)", f"{rsi_val:.1f}", rsi_label)
-        m3.metric("SMA 20", f"₹{float(latest['SMA20']):.2f}", "Above ↑" if float(latest['Close']) > float(latest['SMA20']) else "Below ↓")
-        m4.metric("SMA 50", f"₹{float(latest['SMA50']):.2f}", "Above ↑" if float(latest['Close']) > float(latest['SMA50']) else "Below ↓")
-        m5.metric("MACD", "Bullish" if macd_val > sig_val else "Bearish", f"{macd_val:.3f}")
-
-        st.markdown("<div style='height: 1rem'></div>", unsafe_allow_html=True)
-
-        engine_cols = st.columns([1.2, 1, 1, 1])
-        engine_cols[0].markdown(f"""
-        <div class='glass-card' style='height:100%;'>
-            <div class='section-kicker'>Decision Engine</div>
-            <div style='font-family: Syne, sans-serif; font-size:2.3rem; font-weight:800; color:{verdict_color}; line-height:0.95;'>
-                {recommendation["verdict"]}
-            </div>
-            <div style='font-family: JetBrains Mono, monospace; font-size:0.8rem; color:#a8c8b8; margin-top:0.55rem;'>Composite score {recommendation["composite_score"]} · Conviction {recommendation["conviction"]}/100</div>
-            <div style='margin-top:0.8rem; height:8px; border-radius:999px; background:rgba(255,255,255,0.06); overflow:hidden;'>
-                <div style='width:{recommendation["conviction"]}%; height:100%; background:linear-gradient(90deg, {verdict_color}, #4cc9f0);'></div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        engine_cols[1].metric("NEWS SENTIMENT", f"{sentiment_summary['sentiment_percent']}/100", sentiment_summary["sentiment_label"])
-        engine_cols[2].metric("HEADLINES", sentiment_summary["headline_count"], f"{sentiment_summary['positive_headlines']} positive")
-        engine_cols[3].metric("MODEL CONFIDENCE", f"{sentiment_summary['confidence']:.2f}", "News-weighted")
-
-        st.markdown("<div style='height: 0.6rem'></div>", unsafe_allow_html=True)
-        top_left, top_right = st.columns([1.1, 1])
-        with top_left:
-            st.markdown("""
-            <div class='glass-card'>
-                <div class='section-kicker'>What Drove The Call</div>
-                <div class='section-title'>Signal breakdown</div>
-                <div class='section-copy'>A readable explanation of the current model output, combining chart structure and news tone.</div>
-            </div>
-            """, unsafe_allow_html=True)
-            for reason in recommendation["reasons"]:
-                st.markdown(f"- {reason}")
-        with top_right:
-            st.markdown("""
-            <div class='glass-card' style='padding-bottom:0.4rem;'>
-                <div class='section-kicker'>Sentiment Gauge</div>
-                <div class='section-title'>Headline mood map</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.plotly_chart(build_sentiment_gauge(sentiment_summary, recommendation), use_container_width=True)
-
-        # Chart
-        chart_col, factor_col = st.columns([1.55, 1])
-        with chart_col:
-            st.markdown("""
-            <div class='glass-card' style='padding-bottom:0.4rem; margin-bottom:0.7rem;'>
-                <div class='section-kicker'>Price Structure</div>
-                <div class='section-title'>Multi-layer technical view</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.plotly_chart(build_chart(df, ticker), use_container_width=True)
-        with factor_col:
-            st.markdown("""
-            <div class='glass-card' style='padding-bottom:0.4rem; margin-bottom:0.7rem;'>
-                <div class='section-kicker'>Factor Weights</div>
-                <div class='section-title'>Contribution to verdict</div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.plotly_chart(build_factor_chart(df, sentiment_summary), use_container_width=True)
-
-        st.markdown("""
-        <div class='glass-card' style='padding-bottom:0.85rem; margin: 1rem 0 0.8rem;'>
-            <div class='section-kicker'>Headline Tape</div>
-            <div class='section-title'>News sentiment radar</div>
-            <div class='section-copy'>Recent headlines scored individually so the recommendation stays explainable.</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if scored_news_df.empty:
-            st.info("No recent headlines were available, so the sentiment engine defaulted to neutral.")
-        else:
-            display_news = scored_news_df.copy()
-            display_news["published_at"] = display_news["published_at"].dt.strftime("%d %b %H:%M").fillna("N/A")
-            display_news["sentiment"] = display_news["sentiment_score"].map(lambda x: f"{x:+.2f}")
-            st.dataframe(
-                display_news[["published_at", "publisher", "title", "link", "sentiment_label", "sentiment", "source"]],
-                column_config={
-                    "published_at": "Published",
-                    "publisher": "Publisher",
-                    "title": "Headline",
-                    "link": st.column_config.LinkColumn("Link", display_text="Open"),
-                    "sentiment_label": "Tone",
-                    "sentiment": "Score",
-                    "source": "Source",
-                },
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        # AI Report
-        st.markdown("""
-        <div class='glass-card' style='padding-bottom:0.85rem; margin: 1rem 0 0.8rem;'>
-            <div class='section-kicker'>AI Layer</div>
-            <div class='section-title'>Claude analyst report</div>
-            <div class='section-copy'>Narrative commentary generated from the same technical and sentiment inputs driving the quant verdict.</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        with st.spinner("Generating analysis..."):
-            try:
-                summary = summarise_for_ai(df, ticker, stock_info, sentiment_summary, recommendation)
-                report = generate_ai_report(summary, ticker, api_key, recommendation)
-                st.markdown(f"""
-                <div style='background:#080d14; border:1px solid rgba(0,200,120,0.15);
-                     border-left: 3px solid #00c878; border-radius: 6px;
-                     padding: 1.6rem 2rem; font-family: JetBrains Mono, monospace;
-                     font-size: 0.87rem; line-height: 1.85; color: #b8d8c8;'>
-                {report.replace(chr(10), '<br>')}
-                </div>
-                """, unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"AI report failed: {str(e)}")
-
-        st.markdown("---")
-        st.caption(f"Data sourced from Yahoo Finance · Analysis generated by Claude AI · {datetime.now().strftime('%d %b %Y, %H:%M IST')} · Not financial advice")
+    st.markdown("---")
+    st.caption(f"Data sourced from Yahoo Finance · Analysis generated by Claude AI · {datetime.now().strftime('%d %b %Y, %H:%M IST')} · Not financial advice")
 
 else:
     # Empty state
