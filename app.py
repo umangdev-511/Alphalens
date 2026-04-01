@@ -47,7 +47,14 @@ html, body, [class*="css"] { font-family: 'Syne', sans-serif; }
         linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0));
 }
 
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu, footer { visibility: hidden; }
+header {
+    visibility: visible !important;
+    background: transparent !important;
+}
+.stApp header [data-testid="stHeaderActionElements"] {
+    display: none;
+}
 .block-container { padding-top: 1.4rem; padding-bottom: 2rem; max-width: 1240px; }
 
 [data-testid="stSidebar"] {
@@ -616,10 +623,13 @@ def build_factor_chart(df: pd.DataFrame, sentiment_summary: dict) -> go.Figure:
 def lion_mark_svg(size: int = 40) -> str:
     return f"""
     <svg width="{size}" height="{size}" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-        <path d="M32 7C20.6 7 11 15.6 11 27.1c0 6.8 3.4 12.9 8.6 16.8-.4 5 2.2 9.8 7.2 12.1l5.2-4.4 5.2 4.4c5-2.3 7.7-7.1 7.2-12.1 5.2-3.9 8.6-10 8.6-16.8C53 15.6 43.4 7 32 7Z" fill="#000000"/>
-        <path d="M23 24c1.7 0 3 1.6 3 3.5S24.7 31 23 31s-3-1.6-3-3.5 1.3-3.5 3-3.5Zm18 0c1.7 0 3 1.6 3 3.5S42.7 31 41 31s-3-1.6-3-3.5 1.3-3.5 3-3.5Z" fill="#ffffff"/>
-        <path d="M25.3 39.2c3.7 2.7 9.7 2.7 13.4 0 .8-.6 1.9.3 1.4 1.2-1.5 2.8-4.7 4.6-8.1 4.6-3.4 0-6.6-1.8-8.1-4.6-.5-.9.6-1.8 1.4-1.2Z" fill="#ffffff"/>
-        <path d="M31.9 28.9c1.5 0 2.8 1.1 2.8 2.4 0 .7-.3 1.3-.9 1.8l.8 2.6c.1.4-.3.8-.7.7L32 35.8l-1.9.6c-.4.1-.8-.3-.7-.7l.8-2.6c-.6-.5-.9-1.1-.9-1.8 0-1.3 1.3-2.4 2.6-2.4Z" fill="#ffffff"/>
+        <path d="M32 5 18 11 10 24l3 17 12 15h14l12-15 3-17-8-13L32 5Z" fill="#000000"/>
+        <path d="M32 12c-5.6 0-10.8 2.7-13.8 7.3 1.7-.2 3.4.2 4.8 1.1 2.5-1.7 5.7-2.6 9-2.6s6.5.9 9 2.6c1.4-.9 3.1-1.3 4.8-1.1C42.8 14.7 37.6 12 32 12Z" fill="#ffffff"/>
+        <path d="M22.5 22.5c1.6 1 2.9 2.3 3.9 3.9-2.2.6-4.2 1.8-5.8 3.5-1.4-.7-2.9-1-4.4-.9.7-2.8 3-5.4 6.3-7.5Zm19 0c3.3 2.1 5.6 4.7 6.3 7.5-1.5-.1-3 .2-4.4.9-1.6-1.7-3.6-2.9-5.8-3.5 1-1.6 2.3-2.9 3.9-3.9Z" fill="#ffffff"/>
+        <path d="M24.5 31.5c2.2 0 4 1.8 4 4 0 2-1.5 3.7-3.5 4l-2.4 7.5-4.1-2.2 1.9-7.5c-.7-.6-1.1-1.5-1.1-2.5 0-2.2 1.8-4 4.2-4Zm15 0c2.4 0 4.2 1.8 4.2 4 0 1-.4 1.9-1.1 2.5l1.9 7.5-4.1 2.2-2.4-7.5c-2-.3-3.5-2-3.5-4 0-2.2 1.8-4 4-4Z" fill="#ffffff"/>
+        <path d="M32 26.5c3.2 0 5.8 2.4 5.8 5.2 0 1.7-.9 3.2-2.3 4.2l2.1 8.7H26.4l2.1-8.7c-1.4-1-2.3-2.5-2.3-4.2 0-2.8 2.6-5.2 5.8-5.2Z" fill="#ffffff"/>
+        <path d="M29.2 32.6c.6 0 1 .4 1 1 0 .9.8 1.6 1.8 1.6s1.8-.7 1.8-1.6c0-.6.4-1 1-1s1 .4 1 1c0 2-1.7 3.6-3.8 3.6s-3.8-1.6-3.8-3.6c0-.6.4-1 1-1Z" fill="#000000"/>
+        <path d="M27 29.8c.8 0 1.4.6 1.4 1.4S27.8 32.6 27 32.6s-1.4-.6-1.4-1.4.6-1.4 1.4-1.4Zm10 0c.8 0 1.4.6 1.4 1.4s-.6 1.4-1.4 1.4-1.4-.6-1.4-1.4.6-1.4 1.4-1.4Z" fill="#000000"/>
     </svg>
     """
 
