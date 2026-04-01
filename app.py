@@ -837,28 +837,37 @@ st.markdown("""
 # ─────────────────────────────────────────────
 if "analysis_payload" not in st.session_state:
     st.session_state.analysis_payload = None
+if "pending_analysis" not in st.session_state:
+    st.session_state.pending_analysis = False
 
 with st.form("analysis_form", clear_on_submit=False):
     col1, col2 = st.columns([4, 1])
     with col1:
-        ticker = st.text_input(
+        st.text_input(
             "",
             placeholder="Enter NSE ticker — e.g. RELIANCE, TCS, INFY, HDFCBANK",
+            key="ticker_input",
             label_visibility="collapsed",
         )
     with col2:
         analyse = st.form_submit_button("ANALYSE →", use_container_width=True, type="primary")
+
+if analyse:
+    st.session_state.pending_analysis = True
 
 st.markdown("---")
 
 # ─────────────────────────────────────────────
 # ANALYSIS
 # ─────────────────────────────────────────────
-if analyse:
+if st.session_state.pending_analysis:
+    ticker = st.session_state.get("ticker_input", "")
     if not api_key:
         st.error("Enter your Anthropic API key in the sidebar to continue.")
+        st.session_state.pending_analysis = False
     elif not ticker:
         st.warning("Please enter an NSE ticker symbol.")
+        st.session_state.pending_analysis = False
     else:
         ticker = ticker.strip().upper()
 
@@ -883,7 +892,9 @@ if analyse:
                     "ai_report": ai_report,
                     "ai_report_error": ai_report_error,
                 }
+                st.session_state.pending_analysis = False
             except Exception as e:
+                st.session_state.pending_analysis = False
                 st.error(f"⚠ {str(e)}")
                 st.info("💡 Yahoo Finance may be rate-limiting. Wait 30 seconds and try again.")
                 st.stop()
