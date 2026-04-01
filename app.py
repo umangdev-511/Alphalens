@@ -15,7 +15,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 st.set_page_config(
     page_title="AlphaLens — AI Stock Analyst",
-    page_icon="📡",
+    page_icon="⬛",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -194,6 +194,39 @@ hr { border-color: rgba(65,227,154,0.1) !important; }
     background: rgba(255,255,255,0.06);
     color: var(--text);
     margin-bottom: 0.65rem;
+}
+.brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+}
+.brand-badge {
+    width: 62px;
+    height: 62px;
+    border-radius: 18px;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+}
+.brand-lockup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.18rem;
+}
+.brand-name {
+    color: var(--text);
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+}
+.brand-subtitle {
+    color: #7bc7aa;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -579,6 +612,17 @@ def build_factor_chart(df: pd.DataFrame, sentiment_summary: dict) -> go.Figure:
     )
     return fig
 
+
+def lion_mark_svg(size: int = 40) -> str:
+    return f"""
+    <svg width="{size}" height="{size}" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M32 7C20.6 7 11 15.6 11 27.1c0 6.8 3.4 12.9 8.6 16.8-.4 5 2.2 9.8 7.2 12.1l5.2-4.4 5.2 4.4c5-2.3 7.7-7.1 7.2-12.1 5.2-3.9 8.6-10 8.6-16.8C53 15.6 43.4 7 32 7Z" fill="#000000"/>
+        <path d="M23 24c1.7 0 3 1.6 3 3.5S24.7 31 23 31s-3-1.6-3-3.5 1.3-3.5 3-3.5Zm18 0c1.7 0 3 1.6 3 3.5S42.7 31 41 31s-3-1.6-3-3.5 1.3-3.5 3-3.5Z" fill="#ffffff"/>
+        <path d="M25.3 39.2c3.7 2.7 9.7 2.7 13.4 0 .8-.6 1.9.3 1.4 1.2-1.5 2.8-4.7 4.6-8.1 4.6-3.4 0-6.6-1.8-8.1-4.6-.5-.9.6-1.8 1.4-1.2Z" fill="#ffffff"/>
+        <path d="M31.9 28.9c1.5 0 2.8 1.1 2.8 2.4 0 .7-.3 1.3-.9 1.8l.8 2.6c.1.4-.3.8-.7.7L32 35.8l-1.9.6c-.4.1-.8-.3-.7-.7l.8-2.6c-.6-.5-.9-1.1-.9-1.8 0-1.3 1.3-2.4 2.6-2.4Z" fill="#ffffff"/>
+    </svg>
+    """
+
 def build_chart(df: pd.DataFrame, ticker: str) -> go.Figure:
     fig = make_subplots(
         rows=3, cols=1,
@@ -719,7 +763,15 @@ Be direct. No fluff. Keep the quant verdict unchanged. Use ₹ for prices."""}]
 # SIDEBAR
 # ─────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 📡 ALPHALENS")
+    st.markdown(f"""
+    <div class='brand-row' style='margin-bottom:0.2rem;'>
+        <div class='brand-badge'>{lion_mark_svg(38)}</div>
+        <div class='brand-lockup'>
+            <div class='brand-name'>ALPHALENS</div>
+            <div class='brand-subtitle'>Lion Signal Engine</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
     st.markdown("---")
     api_key = st.text_input("ANTHROPIC API KEY", type="password", placeholder="sk-ant-...")
     st.markdown("---")
@@ -737,7 +789,13 @@ with st.sidebar:
 # ─────────────────────────────────────────────
 st.markdown("""
 <div class='hero-shell'>
-    <div class='hero-kicker'>AlphaLens // Indian Equities Intelligence Layer</div>
+    <div class='brand-row' style='margin-bottom:1rem;'>
+        <div class='brand-badge'>""" + lion_mark_svg(42) + """</div>
+        <div class='brand-lockup'>
+            <div class='brand-name' style='font-size:1.5rem;'>AlphaLens</div>
+            <div class='brand-subtitle'>Indian Equities Intelligence Layer</div>
+        </div>
+    </div>
     <div class='hero-title'>AI stock analyst with a live news-sentiment decision engine for NSE names.</div>
     <div class='hero-copy'>
         Technical momentum, fresh headlines, and an explainable recommendation model merged into one builder-grade dashboard.
